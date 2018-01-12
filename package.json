@@ -1,0 +1,20 @@
+{
+    "name": "homebridge-zhome",
+    "version": "0.0.1",
+    "description": "Homebridge platform for ZigbeeHome (https://github.com/isundaylee/ZigbeeHome)",
+    "license": "MIT",
+    "keywords": [
+        "homebridge-plugin"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git://github.com/isundaylee/homebridge-zhome.git"
+    },
+    "bugs": {
+        "url": "http://github.com/isundaylee/homebridge-zhome/issues"
+    },
+    "engines": {
+        "node": ">=0.12.0",
+        "homebridge": ">=0.2.0"
+    }
+}
