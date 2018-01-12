@@ -1,22 +1,45 @@
-function FakeLightBulb(accessory, config, toolkit) {
-    this.accessory = accessory;
-    this.config = config;
-    this.toolkit = toolkit;
-}
+const assert = require('assert');
 
-// `initialize` is run upon first creating the accessory
-FakeLightBulb.prototype.initialize = function() {
-    this.accessory.addService(this.toolkit.Service.Lightbulb, this.config.name);
-}
+class FakeLightBulb {
+    constructor(accessory, config, server, toolkit) {
+        this.accessory = accessory;
+        this.mac = this.accessory.context.macAddress
+        this.config = config;
+        this.server = server
+        this.toolkit = toolkit;
+    }
 
-// `configure` is run from configureAccessory phase
-FakeLightBulb.prototype.configure = function() {
-    this.accessory.getService(this.toolkit.Service.Lightbulb)
-        .getCharacteristic(this.toolkit.Characteristic.On)
-        .on('set', function(value, callback) {
-            this.toolkit.log(this.config.name + ': Setting value to ' + value);
-            callback();
-        }.bind(this));
+    // `initialize` is run upon first creating the accessory
+    initialize() {
+        this.accessory.addService(this.toolkit.Service.Lightbulb,
+            this.config.name);
+    }
+
+    // `configure` is run from configureAccessory phase
+    configure() {
+        this.server.on('report', (mac, key, value) => {
+            if (mac != this.mac) {
+                return;
+            }
+
+            assert(key == 'on');
+
+            this.accessory.getService(this.toolkit.Service.Lightbulb)
+                .getCharacteristic(this.toolkit.Characteristic.On)
+                .updateValue(value);
+        });
+
+        this.server.send(this.mac, 'get', 'on', null);
+
+        this.accessory.getService(this.toolkit.Service.Lightbulb)
+            .getCharacteristic(this.toolkit.Characteristic.On)
+            .on('set', function(value, callback) {
+                this.toolkit.log.info(this.config.name + ': Setting value to ' +
+                    value);
+                this.server.send(this.mac, 'set', 'on', value);
+                callback();
+            }.bind(this));
+    }
 }
 
 module.exports = FakeLightBulb;

@@ -1,5 +1,7 @@
 let PlatformAccessory, Service, Characteristic, UUIDGen;
 
+const Server = require('./server');
+
 const PLUGIN_NAME = "homebridge-zhome"
 const PLATFORM_NAME = "ZHome"
 
@@ -22,11 +24,15 @@ function ZHome(log, config, api) {
     this.config = config
     this.accessories = []
 
+    log.debug = log.info;
+
     this.toolkit = {
         'Service': Service,
         'Characteristic': Characteristic,
         'log': log
     }
+
+    this.server = new Server(log);
 
     if (api) {
         this.api = api;
@@ -34,8 +40,18 @@ function ZHome(log, config, api) {
         this.api.on('didFinishLaunching', function() {
             // TODO: Start discovering new accessories.
 
-            this.addAccessoryIfNecessary('1122334455667788', 'fake_light_bulb');
-            this.addAccessoryIfNecessary('AABBCCDDEEFF1122', 'fake_light_bulb');
+            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, this.accessories);
+            this.accessories = [];
+
+            this.server.on('ping', (mac, key, value) => {
+                if (key != 'type') {
+                    this.log.error('Received ping from ' + mac + ' with ' +
+                        'unexpected key ' + key + '.');
+                    return;
+                }
+
+                this.addAccessoryIfNecessary(mac, value);
+            });
         }.bind(this));
     }
 }
@@ -54,12 +70,12 @@ ZHome.prototype.addAccessory = function(macAddress, type) {
     let accessoryConfig = this.config.accessories[macAddress];
 
     if (accessoryConfig == null) {
-        this.log("Not adding device " + macAddress + " because it is not " +
-            "declared in config.js.");
+        this.log.info("Not adding device " + macAddress + " because it is not "
+            + "declared in config.js.");
         return false;
     }
 
-    this.log("Adding accessory " + macAddress + " of type `" + type + "`.");
+    this.log.info("Adding accessory " + macAddress + " of type `" + type + "`.");
 
     let uuid = UUIDGen.generate(macAddress);
     let accessory = new PlatformAccessory(accessoryConfig.name, uuid);
@@ -69,7 +85,7 @@ ZHome.prototype.addAccessory = function(macAddress, type) {
     accessory.context.config = accessoryConfig;
 
     let accessoryObject = new ACCESSORY_MAP[type](accessory, accessoryConfig,
-        this.toolkit);
+        this.server, this.toolkit);
 
     accessoryObject.initialize();
     accessoryObject.configure();
@@ -87,11 +103,11 @@ ZHome.prototype.configureAccessory = function(accessory) {
     let macAddress = accessory.context.macAddress;
     let accessoryConfig = accessory.context.config;
 
-    this.log("Configuring cached accessory " + macAddress + " of type `" +
+    this.log.info("Configuring cached accessory " + macAddress + " of type `" +
         type + "`.");
 
     let accessoryObject = new ACCESSORY_MAP[type](accessory, accessoryConfig,
-        this.toolkit);
+        this.server, this.toolkit);
 
     accessoryObject.configure();
 
