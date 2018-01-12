@@ -10,6 +10,14 @@ class FakeClient {
         }
     }
 
+    broadcast(method, key, value) {
+        accessories = Object.values(this.accessories);
+
+        for (var i=0; i<accessories.length; i++) {
+            accessories[i].request(method, key, value);
+        }
+    }
+
     request(mac, method, key, value) {
         this.accessories[mac].request(method, key, value);
     }

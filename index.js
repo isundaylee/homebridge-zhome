@@ -5,6 +5,8 @@ const Server = require('./server');
 const PLUGIN_NAME = "homebridge-zhome"
 const PLATFORM_NAME = "ZHome"
 
+const EXPIRATION_TIMEOUT = 20.0 * 1000;
+
 const ACCESSORY_MAP = {
     'fake_light_bulb': require('./accessories/fake_light_bulb')
 }
@@ -22,7 +24,8 @@ module.exports = function (homebridge) {
 function ZHome(log, config, api) {
     this.log = log
     this.config = config
-    this.accessories = []
+    this.accessories = {}
+    this.expirationTimeouts = {}
 
     log.debug = log.info;
 
@@ -38,11 +41,6 @@ function ZHome(log, config, api) {
         this.api = api;
 
         this.api.on('didFinishLaunching', function() {
-            // TODO: Start discovering new accessories.
-
-            this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, this.accessories);
-            this.accessories = [];
-
             this.server.on('ping', (mac, key, value) => {
                 if (key != 'type') {
                     this.log.error('Received ping from ' + mac + ' with ' +
@@ -51,14 +49,28 @@ function ZHome(log, config, api) {
                 }
 
                 this.addAccessoryIfNecessary(mac, value);
+                this.resetExpirationTimeout(mac);
             });
         }.bind(this));
     }
 }
 
+ZHome.prototype.resetExpirationTimeout = function(macAddress) {
+    if (this.expirationTimeouts[macAddress] != null) {
+        clearTimeout(this.expirationTimeouts[macAddress]);
+    }
+
+    this.expirationTimeouts[macAddress] = setTimeout(() => {
+        this.log.info("Removing " + macAddress + " due to missed pings.");
+        this.removeAccessory(macAddress);
+    }, EXPIRATION_TIMEOUT);
+}
+
 ZHome.prototype.addAccessoryIfNecessary = function(macAddress, type) {
-    for (var i=0; i<this.accessories.length; i++) {
-        if (this.accessories[i].context.macAddress == macAddress) {
+    let accessories = Object.values(this.accessories);
+
+    for (var i=0; i<accessories.length; i++) {
+        if (accessories[i].context.macAddress == macAddress) {
             return false;
         }
     }
@@ -90,7 +102,8 @@ ZHome.prototype.addAccessory = function(macAddress, type) {
     accessoryObject.initialize();
     accessoryObject.configure();
 
-    this.accessories.push(accessory);
+    this.accessories[macAddress] = accessory;
+    this.resetExpirationTimeout(macAddress);
     this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
 
     return true;
@@ -111,5 +124,14 @@ ZHome.prototype.configureAccessory = function(accessory) {
 
     accessoryObject.configure();
 
-    this.accessories.push(accessory);
+    this.accessories[macAddress] = accessory;
+    this.resetExpirationTimeout(macAddress);
+}
+
+ZHome.prototype.removeAccessory = function(macAddress) {
+    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME,
+        [this.accessories[macAddress]]);
+
+    delete this.accessories[macAddress];
+    delete this.expirationTimeouts[macAddress];
 }

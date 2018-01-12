@@ -10,6 +10,13 @@ class Server extends EventEmitter {
         this.log = log;
     }
 
+    broadcast(method, key, value) {
+        this.log.debug(util.format('Broadcasting (%s, (%s, %s))', method, key,
+            value));
+            
+        this.client.broadcast(method, key, value);
+    }
+
     send(mac, method, key, value) {
         this.log.debug(util.format('Sending (%s, (%s, %s)) -> %s', method, key,
             value, mac));
