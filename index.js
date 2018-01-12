@@ -21,117 +21,119 @@ module.exports = function (homebridge) {
     homebridge.registerPlatform(PLUGIN_NAME, PLATFORM_NAME, ZHome, true);
 }
 
-function ZHome(log, config, api) {
-    this.log = log
-    this.config = config
-    this.accessories = {}
-    this.expirationTimeouts = {}
+class ZHome {
+    constructor(log, config, api) {
+        this.log = log
+        this.config = config
+        this.accessories = {}
+        this.expirationTimeouts = {}
 
-    log.debug = log.info;
+        log.debug = log.info;
 
-    this.toolkit = {
-        'Service': Service,
-        'Characteristic': Characteristic,
-        'log': log
-    }
+        this.toolkit = {
+            'Service': Service,
+            'Characteristic': Characteristic,
+            'log': log
+        }
 
-    this.server = new Server(log);
+        this.server = new Server(log);
 
-    if (api) {
-        this.api = api;
+        if (api) {
+            this.api = api;
 
-        this.api.on('didFinishLaunching', function() {
-            this.server.on('ping', (mac, key, value) => {
-                if (key != 'type') {
-                    this.log.error('Received ping from ' + mac + ' with ' +
-                        'unexpected key ' + key + '.');
-                    return;
-                }
+            this.api.on('didFinishLaunching', () => {
+                this.server.on('ping', (mac, key, value) => {
+                    if (key != 'type') {
+                        this.log.error('Received ping from ' + mac + ' with ' +
+                            'unexpected key ' + key + '.');
+                        return;
+                    }
 
-                this.addAccessoryIfNecessary(mac, value);
-                this.resetExpirationTimeout(mac);
+                    this.addAccessoryIfNecessary(mac, value);
+                    this.resetExpirationTimeout(mac);
+                });
             });
-        }.bind(this));
-    }
-}
-
-ZHome.prototype.resetExpirationTimeout = function(macAddress) {
-    if (this.expirationTimeouts[macAddress] != null) {
-        clearTimeout(this.expirationTimeouts[macAddress]);
-    }
-
-    this.expirationTimeouts[macAddress] = setTimeout(() => {
-        this.log.info("Removing " + macAddress + " due to missed pings.");
-        this.removeAccessory(macAddress);
-    }, EXPIRATION_TIMEOUT);
-}
-
-ZHome.prototype.addAccessoryIfNecessary = function(macAddress, type) {
-    let accessories = Object.values(this.accessories);
-
-    for (var i=0; i<accessories.length; i++) {
-        if (accessories[i].context.macAddress == macAddress) {
-            return false;
         }
     }
 
-    return this.addAccessory(macAddress, type);
-}
+    resetExpirationTimeout(macAddress) {
+        if (this.expirationTimeouts[macAddress] != null) {
+            clearTimeout(this.expirationTimeouts[macAddress]);
+        }
 
-ZHome.prototype.addAccessory = function(macAddress, type) {
-    let accessoryConfig = this.config.accessories[macAddress];
-
-    if (accessoryConfig == null) {
-        this.log.info("Not adding device " + macAddress + " because it is not "
-            + "declared in config.js.");
-        return false;
+        this.expirationTimeouts[macAddress] = setTimeout(() => {
+            this.log.info("Removing " + macAddress + " due to missed pings.");
+            this.removeAccessory(macAddress);
+        }, EXPIRATION_TIMEOUT);
     }
 
-    this.log.info("Adding accessory " + macAddress + " of type `" + type + "`.");
+    addAccessoryIfNecessary(macAddress, type) {
+        let accessories = Object.values(this.accessories);
 
-    let uuid = UUIDGen.generate(macAddress);
-    let accessory = new PlatformAccessory(accessoryConfig.name, uuid);
+        for (var i=0; i<accessories.length; i++) {
+            if (accessories[i].context.macAddress == macAddress) {
+                return false;
+            }
+        }
 
-    accessory.context.macAddress = macAddress;
-    accessory.context.type = type;
-    accessory.context.config = accessoryConfig;
+        return this.addAccessory(macAddress, type);
+    }
 
-    let accessoryObject = new ACCESSORY_MAP[type](accessory, accessoryConfig,
-        this.server, this.toolkit);
+    addAccessory(macAddress, type) {
+        let accessoryConfig = this.config.accessories[macAddress];
 
-    accessoryObject.initialize();
-    accessoryObject.configure();
+        if (accessoryConfig == null) {
+            this.log.info("Not adding device " + macAddress + " because it is not "
+                + "declared in config.js.");
+            return false;
+        }
 
-    this.accessories[macAddress] = accessory;
-    this.resetExpirationTimeout(macAddress);
-    this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.log.info("Adding accessory " + macAddress + " of type `" + type + "`.");
 
-    return true;
-}
+        let uuid = UUIDGen.generate(macAddress);
+        let accessory = new PlatformAccessory(accessoryConfig.name, uuid);
 
-ZHome.prototype.configureAccessory = function(accessory) {
-    accessory.reachable = false;
+        accessory.context.macAddress = macAddress;
+        accessory.context.type = type;
+        accessory.context.config = accessoryConfig;
 
-    let type = accessory.context.type;
-    let macAddress = accessory.context.macAddress;
-    let accessoryConfig = accessory.context.config;
+        let accessoryObject = new ACCESSORY_MAP[type](accessory, accessoryConfig,
+            this.server, this.toolkit);
 
-    this.log.info("Configuring cached accessory " + macAddress + " of type `" +
-        type + "`.");
+        accessoryObject.initialize();
+        accessoryObject.configure();
 
-    let accessoryObject = new ACCESSORY_MAP[type](accessory, accessoryConfig,
-        this.server, this.toolkit);
+        this.accessories[macAddress] = accessory;
+        this.resetExpirationTimeout(macAddress);
+        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
 
-    accessoryObject.configure();
+        return true;
+    }
 
-    this.accessories[macAddress] = accessory;
-    this.resetExpirationTimeout(macAddress);
-}
+    configureAccessory(accessory) {
+        accessory.reachable = false;
 
-ZHome.prototype.removeAccessory = function(macAddress) {
-    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME,
-        [this.accessories[macAddress]]);
+        let type = accessory.context.type;
+        let macAddress = accessory.context.macAddress;
+        let accessoryConfig = accessory.context.config;
 
-    delete this.accessories[macAddress];
-    delete this.expirationTimeouts[macAddress];
+        this.log.info("Configuring cached accessory " + macAddress + " of type `" +
+            type + "`.");
+
+        let accessoryObject = new ACCESSORY_MAP[type](accessory, accessoryConfig,
+            this.server, this.toolkit);
+
+        accessoryObject.configure();
+
+        this.accessories[macAddress] = accessory;
+        this.resetExpirationTimeout(macAddress);
+    }
+
+    removeAccessory(macAddress) {
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME,
+            [this.accessories[macAddress]]);
+
+        delete this.accessories[macAddress];
+        delete this.expirationTimeouts[macAddress];
+    }
 }

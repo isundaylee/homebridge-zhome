@@ -29,10 +29,10 @@ class FakeLightBulbClient {
         this.mac = mac;
         this.on = true;
 
-        setInterval(function() {
+        setInterval(() => {
             this.client.onReceive(this.mac, 'ping', 'type', 'fake_light_bulb');
             this.report();
-        }.bind(this), 10000);
+        }, 10000);
     }
 
     request(method, key, value) {

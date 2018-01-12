@@ -33,12 +33,12 @@ class FakeLightBulb {
 
         this.accessory.getService(this.toolkit.Service.Lightbulb)
             .getCharacteristic(this.toolkit.Characteristic.On)
-            .on('set', function(value, callback) {
+            .on('set', (value, callback) => {
                 this.toolkit.log.info(this.config.name + ': Setting value to ' +
                     value);
                 this.server.send(this.mac, 'set', 'on', value);
                 callback();
-            }.bind(this));
+            });
     }
 }
 

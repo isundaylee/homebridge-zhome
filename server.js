@@ -13,7 +13,7 @@ class Server extends EventEmitter {
     broadcast(method, key, value) {
         this.log.debug(util.format('Broadcasting (%s, (%s, %s))', method, key,
             value));
-            
+
         this.client.broadcast(method, key, value);
     }
 
